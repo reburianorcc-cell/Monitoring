@@ -2,6 +2,7 @@ import pandas as pd
 import json
 import re
 import streamlit as st
+from portal_chart import render_plotly_chart
 from pathlib import Path
 from urllib.parse import quote_plus
 from .charts import occupancy_chart, profile_chart, center_type_chart
@@ -23,7 +24,7 @@ def overview(df):
     left, right = st.columns([1.05, 1])
     with left:
         st.subheader("Center Occupancy")
-        st.plotly_chart(occupancy_chart(df), use_container_width=True)
+        render_plotly_chart(occupancy_chart(df), use_container_width=True)
     with right:
         st.subheader("Evacuation Centers Map")
         deck = create_map(df)
@@ -32,10 +33,10 @@ def overview(df):
     left, right = st.columns([1, 1])
     with left:
         st.subheader("Evacuee Profile")
-        st.plotly_chart(profile_chart(profile_metrics(df)), use_container_width=True)
+        render_plotly_chart(profile_chart(profile_metrics(df)), use_container_width=True)
     with right:
         st.subheader("Center Types")
-        st.plotly_chart(center_type_chart(df), use_container_width=True)
+        render_plotly_chart(center_type_chart(df), use_container_width=True)
     st.subheader("Centers Requiring Attention")
     attention = df[df["Occupancy Rate"] >= 80][["Name", "Address", "Actual No. of Evacuees", "Capacity", "Occupancy Rate", "Status"]].copy()
     attention["Occupancy Rate"] = attention["Occupancy Rate"].map(lambda x: f"{x:.1f}%")
@@ -83,7 +84,7 @@ def centers_view(df):
 
 def evacuees_view(df):
     st.subheader("Evacuee Summary")
-    st.plotly_chart(profile_chart(profile_metrics(df)), use_container_width=True)
+    render_plotly_chart(profile_chart(profile_metrics(df)), use_container_width=True)
     st.dataframe(df[["Name", "Actual No. of Evacuees", "No. of Male", "No. of Female", "Senior Citizens", "No. of PWD"]], use_container_width=True, hide_index=True)
 
 

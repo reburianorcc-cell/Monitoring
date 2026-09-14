@@ -10,9 +10,15 @@ from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
+import plotly.io as pio
 import streamlit as st
 from sqlalchemy import text
 from supabase import create_client
+from portal_chart import render_plotly_chart
+
+# Use one predictable chart theme in every portal module. Charts remain light
+# and readable even when the surrounding Streamlit application uses dark mode.
+pio.templates.default = "plotly_white"
 
 # ------------------------------------------------------------------------------
 # Supabase & Database Initialization
@@ -123,6 +129,15 @@ def fetch_uploaded_files_from_supabase() -> dict[str, str]:
     except Exception as e:
         print(f"Error fetching files from Supabase storage: {e}")
         return {}
+
+
+def fetch_clup_dashboard_names() -> list[str]:
+    """Return CLUP names so Admin Settings can assign operators across modules."""
+    try:
+        response = supabase.table("clup_dashboards").select("name").order("name").execute()
+        return [row["name"] for row in (response.data or []) if row.get("name")]
+    except Exception:
+        return []
 
 
 def download_dashboard_file_from_supabase(
@@ -284,7 +299,11 @@ DEFAULT_TITLE = "SOCOCA Dashboard"
 OVERALL_DASHBOARD_NAME = "Overall View"
 ADMIN_DB_FILE = Path(__file__).with_name("dashboard_admin.db")
 
-st.set_page_config(page_title=DEFAULT_TITLE, layout="wide")
+st.set_page_config(
+    page_title=DEFAULT_TITLE,
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 # CSS injection for dynamic theme adaptability
 st.markdown(
@@ -344,6 +363,8 @@ st.markdown(
     .js-plotly-plot .plotly .legendtext,
     .js-plotly-plot .plotly .legendtitletext,
     .js-plotly-plot .plotly .gtitle,
+    .js-plotly-plot .plotly .xtitle,
+    .js-plotly-plot .plotly .ytitle,
     .js-plotly-plot .plotly .xtick text,
     .js-plotly-plot .plotly .ytick text,
     .js-plotly-plot .plotly .annotation-text,
@@ -378,49 +399,41 @@ def handle_logout() -> None:
 
 
 def apply_chart_theme(figure):
-    """Match Plotly to Streamlit's active theme and keep exports opaque."""
-    try:
-        theme_name = st.context.theme.type
-    except (AttributeError, RuntimeError):
-        theme_name = st.get_option("theme.base") or "light"
-
-    is_dark = str(theme_name).lower() == "dark"
-    background = "#0E1117" if is_dark else "#FFFFFF"
-    foreground = "#F8FAFC" if is_dark else "#262730"
-    grid = "rgba(248,250,252,0.16)" if is_dark else "rgba(38,39,48,0.14)"
-    zero_line = "rgba(248,250,252,0.24)" if is_dark else "rgba(38,39,48,0.22)"
-
+    """Keep Plotly transparent and let Streamlit apply its live chart theme."""
     figure.update_layout(
-        paper_bgcolor=background,
-        plot_bgcolor=background,
-        font=dict(color=foreground, size=12),
-        title_font=dict(color=foreground),
-        legend=dict(
-            font=dict(color=foreground, size=11),
-            bgcolor=background,
-        ),
-        xaxis=dict(
-            color=foreground,
-            gridcolor=grid,
-            zerolinecolor=zero_line,
-        ),
-        yaxis=dict(
-            color=foreground,
-            gridcolor=grid,
-            zerolinecolor=zero_line,
-        ),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(size=12),
+        legend=dict(bgcolor="rgba(0,0,0,0)"),
     )
     return figure
 
 
 def apply_pie_chart_theme(figure):
-    """Apply the final adaptive donut design with readable slice labels."""
+    """Match the Evacuation/CLUP donut design in light and dark themes."""
     figure = apply_chart_theme(figure)
-    background = figure.layout.paper_bgcolor
     figure.update_traces(
+        hole=0.60,
+        textposition="inside",
+        textinfo="percent",
         textfont=dict(size=12),
         insidetextfont=dict(color="#FFFFFF", size=12),
-        marker=dict(line=dict(color=background, width=1.5)),
+        marker=dict(line=dict(color="rgba(0,0,0,0)", width=1.5)),
+        hovertemplate="%{label}<br>%{percent}<br>%{value:,} incident(s)<extra></extra>",
+    )
+    figure.update_layout(
+        height=410,
+        margin=dict(l=10, r=185, t=55, b=20),
+        legend=dict(
+            orientation="v",
+            x=1.02,
+            y=.5,
+            xanchor="left",
+            yanchor="middle",
+            font=dict(size=11),
+            bgcolor="rgba(0,0,0,0)",
+            title_text="",
+        ),
     )
     return figure
 
@@ -1506,7 +1519,7 @@ if not st.session_state.admin_authenticated:
                 radial-gradient(circle at 85% 80%, rgba(52, 152, 219, .14), transparent 32%),
                 linear-gradient(135deg, #090d14 0%, #111827 52%, #0b1220 100%);
         }
-        [data-testid="stHeader"], [data-testid="stSidebar"] {display: none;}
+        [data-testid="stHeader"], [data-testid="stSidebar"] {display: none !important;}
         .block-container {
             max-width: 1180px;
             padding-top: 6vh;
@@ -1645,7 +1658,7 @@ with st.sidebar:
     st.divider()
     portal_section = st.radio(
         "Main menu",
-        ["Incident Dashboard", "Evacuation Dashboard"],
+        ["Incident Dashboard", "Evacuation Dashboard", "CLUP Monitoring"],
         key="portal_section",
     )
 
@@ -1656,6 +1669,18 @@ if portal_section == "Evacuation Dashboard":
 
     st.session_state.authenticated = True
     module_name = "evacuation.app"
+    if module_name in sys.modules:
+        importlib.reload(sys.modules[module_name])
+    else:
+        importlib.import_module(module_name)
+    st.stop()
+
+if portal_section == "CLUP Monitoring":
+    # CLUP inherits the authenticated Incident account and role assignment.
+    import importlib
+    import sys
+
+    module_name = "clup.app"
     if module_name in sys.modules:
         importlib.reload(sys.modules[module_name])
     else:
@@ -1707,82 +1732,53 @@ else:
 # Sidebar Navigation
 # ------------------------------------------------------------------------------
 with st.sidebar:
-    st.title(" Dashboards")
-    selected_dashboard = st.radio(
-        "Choose a dashboard",
+    def select_incident_page(page_name):
+        st.session_state.incident_page = page_name
+
+    incident_pages = [
+        ("Overview", ":material/home:"),
+        ("Timeline", ":material/timeline:"),
+        ("Gallery", ":material/photo_library:"),
+        ("Map", ":material/map:"),
+        ("Records", ":material/table_view:"),
+        ("Settings", ":material/settings:"),
+    ]
+    if st.session_state.get("incident_page") not in [item[0] for item in incident_pages]:
+        st.session_state.incident_page = "Overview"
+    for page_name, page_icon in incident_pages:
+        st.button(
+            page_name,
+            icon=page_icon,
+            key=f"nav_incident_{page_name.casefold()}",
+            type="primary" if st.session_state.incident_page == page_name else "secondary",
+            use_container_width=True,
+            on_click=select_incident_page,
+            args=(page_name,),
+        )
+
+incident_header, incident_selector = st.columns([1.7, 1], gap="large")
+with incident_header:
+    st.markdown(
+        """
+        <div class="page-heading">
+            <span class="eyebrow">INCIDENT COMMAND CENTER</span>
+            <h1>Incident Monitoring Dashboard</h1>
+            <p>Monitor incident activity, timelines, locations, photos and records.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+with incident_selector:
+    selected_dashboard = st.selectbox(
+        "📊 Selected dashboard",
         dashboard_names,
-        label_visibility="collapsed",
         key="selected_dashboard",
     )
     if account_role == "operator":
         st.caption(f"Operator access: {assigned_dashboard} only.")
-    else:
-        st.caption("Select a location to display its uploaded-data dashboard.")
 
-    # Fetch mapping of stored files from Supabase Storage
-    storage_files_map = fetch_uploaded_files_from_supabase()
-
-    # Generate file dynamic list based on verified state and database tables
-    available_dashboard_names = [
-        name for name in all_dashboard_names if name != OVERALL_DASHBOARD_NAME
-    ]
-
-    if account_role == "operator":
-        available_dashboard_names = [
-            name for name in available_dashboard_names if name == assigned_dashboard
-        ]
-    elif selected_dashboard != OVERALL_DASHBOARD_NAME:
-        available_dashboard_names = [
-            name for name in available_dashboard_names if name == selected_dashboard
-        ]
-
-    total_data_files = len(available_dashboard_names)
-    st.divider()
-    st.markdown(f"#### Available data files ({total_data_files})")
-
-    for number, name in enumerate(available_dashboard_names, start=1):
-        item = st.session_state.uploaded_dashboards.get(name)
-        if item:
-            file_name = item["filename"]
-            file_data = item["data"]
-            mime_type = data_file_mime(file_name)
-        else:
-            file_name = storage_files_map.get(name, f"{name}_data.csv")
-            dash_df = load_dashboard_data(name)
-            file_data = dash_df.to_csv(index=False).encode("utf-8-sig")
-            mime_type = data_file_mime(file_name)
-
-        st.markdown(f"**{number}. {name}**  \n`{file_name}`")
-
-        can_delete_dashboard = account_role in {"admin", "super_admin"}
-        btn_col1, btn_col2 = (
-            st.columns([3, 1]) if can_delete_dashboard else (st.container(), None)
-        )
-        with btn_col1:
-            st.download_button(
-                "Download",
-                data=file_data,
-                file_name=file_name,
-                mime=mime_type,
-                icon=":material/download:",
-                key=f"download_uploaded_{number}_{name}",
-                use_container_width=True,
-            )
-        if can_delete_dashboard and btn_col2 is not None:
-            with btn_col2:
-                if st.button(
-                    " ",
-                    icon=":material/delete:",
-                    key=f"delete_uploaded_{number}_{name}",
-                    help=f"Delete {name} dataset",
-                    use_container_width=True,
-                ):
-                    if delete_dashboard_data_from_supabase(name, account_name):
-                        st.toast(f"Data file '{name}' was deleted.")
-                        st.rerun()
-
-left, right = st.columns([3, 1], gap="large")
-with right:
+left = st.container()
+if st.session_state.incident_page == "Settings":
     admin_name = account_name
     admin_role = account_role
     role_label = {
@@ -1904,9 +1900,57 @@ with right:
                         )
                         st.rerun()
 
+        st.divider()
+        st.subheader("Dashboard data")
+        if selected_dashboard == OVERALL_DASHBOARD_NAME:
+            st.info("Select a specific dashboard to download or delete its stored data.")
+        else:
+            settings_item = st.session_state.uploaded_dashboards.get(selected_dashboard)
+            if settings_item:
+                settings_filename = settings_item["filename"]
+                settings_bytes = settings_item["data"]
+            else:
+                settings_bytes, settings_filename = download_dashboard_file_from_supabase(selected_dashboard)
+                if not settings_bytes:
+                    settings_df = load_dashboard_data(selected_dashboard)
+                    settings_filename = f"{selected_dashboard}_data.csv"
+                    settings_bytes = settings_df.to_csv(index=False).encode("utf-8-sig")
+            st.download_button(
+                "Download selected dashboard data",
+                data=settings_bytes,
+                file_name=settings_filename,
+                mime=data_file_mime(settings_filename),
+                icon=":material/download:",
+                use_container_width=True,
+                key="settings_download_dashboard",
+            )
+            if admin_role in {"admin", "super_admin"}:
+                confirm_settings_delete = st.checkbox(
+                    f"I confirm that I want to delete '{selected_dashboard}'.",
+                    key="settings_confirm_delete",
+                )
+                if st.button(
+                    "Delete selected dashboard",
+                    icon=":material/delete_forever:",
+                    type="primary",
+                    use_container_width=True,
+                    disabled=not confirm_settings_delete,
+                    key="settings_delete_dashboard",
+                ):
+                    if delete_dashboard_data_from_supabase(selected_dashboard, admin_name):
+                        st.session_state.pending_dashboard = OVERALL_DASHBOARD_NAME
+                        st.success(f"Dashboard '{selected_dashboard}' was deleted.")
+                        st.rerun()
+
         if admin_role in {"admin", "super_admin"}:
             if st.button("⚙️ Admin settings", use_container_width=True):
-                show_admin_settings(admin_name, admin_role, all_dashboard_names)
+                assignment_names = list(dict.fromkeys([
+                    *all_dashboard_names,
+                    *fetch_clup_dashboard_names(),
+                ]))
+                show_admin_settings(admin_name, admin_role, assignment_names)
+
+    st.stop()
 
 # ------------------------------------------------------------------------------
 # Data Loading & Processing
@@ -1998,15 +2042,9 @@ else:
                 source_label = "No data available"
 
 with left:
-    st.markdown(
-        f"""
-        <div class="page-heading">
-            <span class="eyebrow">INCIDENT COMMAND CENTER</span>
-            <h1>{html.escape(str(selected_dashboard))} Dashboard</h1>
-            <p>Current data: {html.escape(str(source_label))} · {len(df):,} records</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    st.caption(
+        f"Current dashboard: {selected_dashboard} · "
+        f"Data source: {source_label} · {len(df):,} records"
     )
     if selected_dashboard == OVERALL_DASHBOARD_NAME and not df.empty and "Source Dashboard" in df:
         data_sources = ", ".join(
@@ -2053,7 +2091,7 @@ for name, uploaded_item in st.session_state.uploaded_dashboards.items():
         except Exception:
             pass
 
-with left:
+if st.session_state.incident_page == "Overview":
     summary_chart1, summary_chart2 = st.columns(2, gap="large")
     with summary_chart1:
         if incident_column and df[incident_column].notna().any():
@@ -2073,7 +2111,7 @@ with left:
                 margin=dict(l=10, r=10, t=55, b=10),
                 legend_title_text="",
             )
-            st.plotly_chart(
+            render_plotly_chart(
                 apply_pie_chart_theme(incident_figure), use_container_width=True
             )
         else:
@@ -2097,7 +2135,7 @@ with left:
                 margin=dict(l=10, r=10, t=55, b=10),
                 legend_title_text="",
             )
-            st.plotly_chart(
+            render_plotly_chart(
                 apply_pie_chart_theme(barangay_figure), use_container_width=True
             )
         else:
@@ -2238,13 +2276,9 @@ metric4.metric(
 )
 
 # ------------------------------------------------------------------------------
-# Tabs (Overview, Timeline, Gallery, Map, Records)
+# Sidebar-controlled Incident pages
 # ------------------------------------------------------------------------------
-overview_tab, timeline_tab, gallery_tab, map_tab, records_tab = st.tabs(
-    ["Overview", "Timeline", "Gallery", "Incident map", "Records"]
-)
-
-with overview_tab:
+if st.session_state.incident_page == "Overview":
     chart1, chart2 = st.columns(2)
     with chart1:
         if date_column and filtered[date_column].notna().any():
@@ -2267,7 +2301,7 @@ with overview_tab:
                 marker=dict(color="#78c5ff", size=7),
                 hovertemplate="%{x|%d/%m/%Y}<br>Incidents: %{y:,}<extra></extra>",
             )
-            st.plotly_chart(apply_chart_theme(figure), use_container_width=True)
+            render_plotly_chart(apply_chart_theme(figure), use_container_width=True)
         else:
             st.info("No valid registered dates are available.")
     with chart2:
@@ -2280,7 +2314,7 @@ with overview_tab:
                 orientation="h",
                 title="Incidents per Barangay",
             )
-            st.plotly_chart(apply_chart_theme(figure), use_container_width=True)
+            render_plotly_chart(apply_chart_theme(figure), use_container_width=True)
 
     chart3, chart4 = st.columns(2)
     with chart3:
@@ -2294,7 +2328,7 @@ with overview_tab:
                 title=f"Incidents by {incident_column}",
             )
             figure.update_traces(textposition="inside", textinfo="percent+label")
-            st.plotly_chart(apply_pie_chart_theme(figure), use_container_width=True)
+            render_plotly_chart(apply_pie_chart_theme(figure), use_container_width=True)
         else:
             st.info("No incident category column is available for the pie chart.")
     with chart4:
@@ -2315,14 +2349,14 @@ with overview_tab:
                 title=f"Incidents by {secondary_column}",
                 labels={"Short Category": secondary_column},
             )
-            st.plotly_chart(
+            render_plotly_chart(
                 apply_chart_theme(secondary_figure),
                 use_container_width=True,
             )
         else:
             st.info("No secondary incident category is available for this chart.")
 
-with timeline_tab:
+if st.session_state.incident_page == "Timeline":
     st.subheader("Incident timeline")
     if date_column and filtered[date_column].notna().any():
         timeline_data = filtered.dropna(subset=[date_column]).copy()
@@ -2395,7 +2429,7 @@ with timeline_tab:
             yaxis_title=y_column,
             hovermode="x unified",
         )
-        st.plotly_chart(
+        render_plotly_chart(
             apply_chart_theme(timeline_figure), use_container_width=True
         )
         st.caption(
@@ -2405,7 +2439,7 @@ with timeline_tab:
     else:
         st.info("No valid date column is available for the timeline.")
 
-with gallery_tab:
+if st.session_state.incident_page == "Gallery":
     st.subheader("Incident photo list")
     if gallery_items:
         st.caption(f"{len(gallery_items):,} photo(s) from the current dashboard data.")
@@ -2481,7 +2515,7 @@ with gallery_tab:
             "separate Photos sheet."
         )
 
-with map_tab:
+if st.session_state.incident_page == "Map":
     if {"latitude", "longitude"}.issubset(filtered.columns):
         map_data = filtered.dropna(subset=["latitude", "longitude"]).copy()
         if not map_data.empty:
@@ -2516,13 +2550,13 @@ with map_tab:
                 map=dict(style="open-street-map"),
                 margin=dict(l=0, r=0, t=0, b=0),
             )
-            st.plotly_chart(apply_chart_theme(figure), use_container_width=True)
+            render_plotly_chart(apply_chart_theme(figure), use_container_width=True)
         else:
             st.info("No valid coordinates are available for the current filters.")
     else:
         st.info("The CSV needs latitude and longitude columns to display the map.")
 
-with records_tab:
+if st.session_state.incident_page == "Records":
     st.dataframe(filtered, use_container_width=True, hide_index=True)
     st.download_button(
         "Download current dashboard data",

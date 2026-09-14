@@ -23,17 +23,13 @@ def apply_styles():
        later override that hides the complete header until sign-in succeeds. */
     [data-testid="stToolbar"],
     [data-testid="stStatusWidget"],
-    [data-testid="stDecoration"] {
+    [data-testid="stDecoration"],
+    [data-testid="stAppDeployButton"],
+    #MainMenu {
         display:flex !important;
         visibility:visible !important;
         opacity:1 !important;
         pointer-events:auto !important;
-    }
-    /* Hide only Deploy and the overflow menu, not the navigation bar. */
-    [data-testid="stAppDeployButton"],
-    [data-testid="stMainMenu"],
-    #MainMenu {
-        display:none !important;
     }
     footer {display:none !important}
     [data-testid="stSidebarCollapseButton"],
@@ -314,15 +310,13 @@ def apply_styles():
             z-index:1000000 !important;
         }
         [data-testid="stHeader"] [data-testid="stToolbar"],
+        [data-testid="stHeader"] [data-testid="stAppDeployButton"],
         [data-testid="stHeader"] [data-testid="stStatusWidget"] {
             display:flex !important;
             visibility:visible !important;
             opacity:1 !important;
             pointer-events:auto !important;
         }
-        [data-testid="stHeader"] [data-testid="stAppDeployButton"],
-        [data-testid="stHeader"] [data-testid="stMainMenu"],
-        [data-testid="stHeader"] #MainMenu {display:none !important}
         [data-testid="stSidebarCollapsedControl"] {
             display:flex !important;
             visibility:visible !important;
