@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import date, datetime
+import math
+
 import pandas as pd
 import streamlit as st
 from supabase import Client, create_client
@@ -34,7 +37,22 @@ def _records(frame: pd.DataFrame) -> list[dict]:
         if pd.api.types.is_datetime64_any_dtype(clean[column]):
             clean[column] = clean[column].dt.strftime("%Y-%m-%dT%H:%M:%S")
     clean = clean.astype(object).where(pd.notna(clean), None)
-    return clean.to_dict(orient="records")
+
+    def json_value(value):
+        if value is None:
+            return None
+        if isinstance(value, (pd.Timestamp, datetime, date)):
+            return value.isoformat()
+        if hasattr(value, "item"):
+            value = value.item()
+        if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+            return None
+        return value
+
+    return [
+        {column: json_value(value) for column, value in row.items()}
+        for row in clean.to_dict(orient="records")
+    ]
 
 
 def _frame(rows, kind: str) -> pd.DataFrame:

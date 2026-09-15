@@ -185,7 +185,16 @@ def apply_styles():
     .block-container {padding-top:.8rem;max-width:1540px;padding-bottom:3rem}
     div[data-testid="stMetric"] {background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 8px 24px #0f172a0a;transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease}
     div[data-testid="stMetric"]:hover {transform:translateY(-5px);box-shadow:0 16px 35px #075aaa20;border-color:#b9dafb}
-    div[data-testid="stMetricValue"] {color:var(--ink);font-weight:800}
+    div[data-testid="stMetricValue"] {
+        color:var(--ink);
+        font-weight:800;
+        font-size:clamp(1.55rem,2.25vw,2.6rem) !important;
+        line-height:1.12 !important;
+        white-space:nowrap !important;
+        overflow:visible !important;
+        letter-spacing:-.025em;
+    }
+    div[data-testid="stMetricValue"] > div {overflow:visible !important}
     [data-testid="stPlotlyChart"], [data-testid="stPydeckChart"], [data-testid="stDataFrame"] {background:var(--card);border:1px solid var(--line);border-radius:18px;padding:8px;box-shadow:0 8px 24px #0f172a0a;transition:box-shadow .22s ease,transform .22s ease;overflow:hidden !important}
     [data-testid="stPlotlyChart"]:hover, [data-testid="stPydeckChart"]:hover {box-shadow:0 15px 35px #0f172a14;transform:translateY(-2px)}
     /* When a chart is already inside a bordered card, suppress its second box. */

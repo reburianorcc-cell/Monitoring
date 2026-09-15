@@ -19,9 +19,9 @@ def _title(title, note=""):
 
 
 def overview(master, reclassification_records):
-    total = master["Total Area"].sum()
-    developed = master["Developed Area"].sum()
-    remaining = master["Still to Be Developed"].sum()
+    total = master["Overall Total Area"].max() if "Overall Total Area" in master else master["Total Area"].sum()
+    developed = master["Overall Developed Area"].max() if "Overall Developed Area" in master else master["Developed Area"].sum()
+    remaining = master["Overall Still to Be Developed"].max() if "Overall Still to Be Developed" in master else master["Still to Be Developed"].sum()
     rate = developed / total * 100 if total else 0
     a, b, c, d = st.columns(4)
     developed_share = developed / total * 100 if total else 0
@@ -51,9 +51,9 @@ def overview(master, reclassification_records):
         grouped = master.groupby("Category", as_index=False)[["Total Area", "Developed Area", "Still to Be Developed"]].sum()
         totals = pd.DataFrame([{
             "Category": "TOTAL",
-            "Total Area": grouped["Total Area"].sum(),
-            "Developed Area": grouped["Developed Area"].sum(),
-            "Still to Be Developed": grouped["Still to Be Developed"].sum(),
+            "Total Area": total,
+            "Developed Area": developed,
+            "Still to Be Developed": remaining,
         }])
         summary = pd.concat([grouped, totals], ignore_index=True)
         numeric_columns = ["Total Area", "Developed Area", "Still to Be Developed"]

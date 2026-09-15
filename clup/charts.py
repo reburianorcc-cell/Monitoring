@@ -33,9 +33,11 @@ def land_use_pie(master):
 
 
 def development_chart(master):
+    developed = master["Overall Developed Area"].max() if "Overall Developed Area" in master else master["Developed Area"].sum()
+    remaining = master["Overall Still to Be Developed"].max() if "Overall Still to Be Developed" in master else master["Still to Be Developed"].sum()
     totals = pd.DataFrame({
         "Status": ["Developed", "Still to Be Developed"],
-        "Area": [master["Developed Area"].sum(), master["Still to Be Developed"].sum()],
+        "Area": [developed, remaining],
     })
     fig = px.pie(
         totals, names="Status", values="Area", hole=.60, color="Status",
