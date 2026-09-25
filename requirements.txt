@@ -7,3 +7,4 @@ sqlalchemy
 supabase>=2.18
 pydeck>=0.9
 bcrypt>=4.1
+psycopg[binary]
