@@ -4,7 +4,10 @@ from io import BytesIO
 import re
 import pandas as pd
 
-from .config import BOHOL_CENTER, LAND_USE_ORDER
+try:
+    from .config import BOHOL_CENTER, LAND_USE_ORDER
+except ImportError:
+    from config import BOHOL_CENTER, LAND_USE_ORDER
 
 
 SOURCE_COLUMNS = {

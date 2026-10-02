@@ -1,0 +1,8 @@
+{
+  "admin": {
+    "password_hash": "$2b$12$YLyamvPt15Yi4nXnnwut/eu3NNn.2trz6YmXcjMmInR93nLy6bise",
+    "role": "super_admin",
+    "active": true,
+    "dashboard": null
+  }
+}

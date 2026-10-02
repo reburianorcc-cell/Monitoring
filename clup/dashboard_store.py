@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+import base64
 import math
 
 import pandas as pd
@@ -70,24 +71,63 @@ def list_dashboards(username: str, role: str, assigned_dashboard: str | None = N
             return {}
         query = query.eq("name", assigned_dashboard)
     rows = query.execute().data or []
-    return {
-        row["name"]: {
+    dashboards = {}
+    for row in rows:
+        documents = []
+        for document in row.get("documents_data") or []:
+            item = dict(document)
+            encoded = item.pop("data_base64", None)
+            if encoded:
+                try:
+                    item["data"] = base64.b64decode(encoded)
+                except (ValueError, TypeError):
+                    item["data"] = b""
+            documents.append(item)
+        map_data = row.get("map_data") if isinstance(row.get("map_data"), dict) else {}
+        dashboards[row["name"]] = {
             "master": _frame(row.get("master_data"), "master"),
             "locational": _frame(row.get("locational_data"), "locational"),
             "reclassification": _frame(row.get("reclassification_data"), "reclassification"),
             "source_name": row.get("source_name") or "Database",
+            "land_disputes": pd.DataFrame(row.get("land_dispute_data") or []),
+            "documents": documents,
+            "map_geojson": map_data.get("geojson"),
+            "map_source": map_data.get("source_name"),
+            "municipality_field": map_data.get("municipality_field"),
+            "barangay_field": map_data.get("barangay_field"),
+            "map_legend_field": map_data.get("legend_field"),
         }
-        for row in rows
-    }
+    return dashboards
 
 
-def save_dashboard(name: str, dashboard: dict, username: str, section: str) -> None:
+def save_dashboard(
+    name: str,
+    dashboard: dict,
+    username: str,
+    section: str,
+    history_source_name: str | None = None,
+) -> None:
+    documents = []
+    for document in dashboard.get("documents", []):
+        item = {key: value for key, value in document.items() if key != "data"}
+        if document.get("data"):
+            item["data_base64"] = base64.b64encode(document["data"]).decode("ascii")
+        documents.append(item)
     payload = {
         "name": name,
         "source_name": dashboard.get("source_name"),
         "master_data": _records(dashboard.get("master")),
         "locational_data": _records(dashboard.get("locational")),
         "reclassification_data": _records(dashboard.get("reclassification")),
+        "land_dispute_data": _records(dashboard.get("land_disputes")),
+        "documents_data": documents,
+        "map_data": {
+            "geojson": dashboard.get("map_geojson"),
+            "source_name": dashboard.get("map_source"),
+            "municipality_field": dashboard.get("municipality_field"),
+            "barangay_field": dashboard.get("barangay_field"),
+            "legend_field": dashboard.get("map_legend_field"),
+        },
         "updated_by": username,
     }
     get_client().table("clup_dashboards").upsert(payload, on_conflict="name").execute()
@@ -95,7 +135,7 @@ def save_dashboard(name: str, dashboard: dict, username: str, section: str) -> N
         "username": username,
         "dashboard_name": name,
         "section": section,
-        "source_name": dashboard.get("source_name"),
+        "source_name": history_source_name or dashboard.get("source_name"),
     }).execute()
 
 
