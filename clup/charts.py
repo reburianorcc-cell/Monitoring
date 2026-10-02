@@ -2,7 +2,10 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-from .config import AVERAGE_HECTARE_BENCHMARK, COLORS, LAND_USE_ORDER
+try:
+    from .config import AVERAGE_HECTARE_BENCHMARK, COLORS, LAND_USE_ORDER
+except ImportError:
+    from config import AVERAGE_HECTARE_BENCHMARK, COLORS, LAND_USE_ORDER
 
 
 def land_use_pie(master):

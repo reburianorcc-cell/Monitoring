@@ -23,15 +23,11 @@ pio.templates.default = "plotly_white"
 # ------------------------------------------------------------------------------
 # Supabase & Database Initialization
 # ------------------------------------------------------------------------------
-# Fill in these values in app.py before running the app. Keep this file private.
-SUPABASE_URL = "https://worasqfnsqcxjwxnmyzj.supabase.co"
-SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndvcmFzcWZuc3FjeGp3eG5teXpqIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NzEzNDIzMiwiZXhwIjoyMTAyNzEwMjMyfQ.3vtu28ddyutPnY4mCWU4bNZNpEy2s43zePsCg28f23U"
-SUPABASE_SECRET_KEY = "sb_secret_AzZOz902C1j2CfTBC1K6-g_fyAaU_zS"  # Required for creating and managing accounts.
-POSTGRES_URL = "postgresql://postgres.worasqfnsqcxjwxnmyzj:j9k4%2F.LmXE5jMdL@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"  # Example: postgresql://user:password@host:5432/postgres?sslmode=require
-
-supabase_url = SUPABASE_URL.strip()
-supabase_anon_key = SUPABASE_ANON_KEY.strip()
-supabase_secret_key = SUPABASE_SECRET_KEY.strip()
+supabase_settings = st.secrets["supabase"]
+supabase_url = supabase_settings.get("url")
+supabase_key = supabase_settings.get("key")
+supabase_anon_key = supabase_settings.get("anon_key", supabase_key)
+supabase_secret_key = supabase_settings.get("secret_key")
 
 missing_supabase_secrets = []
 if not supabase_url:
@@ -40,7 +36,7 @@ if not supabase_anon_key:
     missing_supabase_secrets.append("anon_key or key")
 if missing_supabase_secrets:
     st.error(
-        "Set these Supabase values near the top of app.py: "
+        "Missing [supabase] value(s) in .streamlit/secrets.toml: "
         + ", ".join(missing_supabase_secrets)
     )
     st.stop()
@@ -55,9 +51,7 @@ supabase_admin = (
 
 def get_db_connection():
     """Returns Streamlit SQL Connection wrapper."""
-    if not POSTGRES_URL.strip():
-        raise RuntimeError("Set POSTGRES_URL near the top of app.py.")
-    return st.connection("postgres", type="sql", url=POSTGRES_URL.strip())
+    return st.connection("postgres", type="sql")
 
 
 def init_db():
@@ -89,8 +83,9 @@ try:
     init_db()
 except Exception as err:
     st.warning(
-        "The Incident database connection is not configured yet. "
-        "Set POSTGRES_URL near the top of app.py."
+        "The Incident database connection is not configured yet. Copy the "
+        "[connections.postgres] section from your original Incident Dashboard "
+        "secrets.toml into this project's .streamlit/secrets.toml."
     )
 
 
@@ -486,7 +481,7 @@ def require_admin_client():
     if supabase_admin is None:
         raise RuntimeError(
             "Account creation requires the Supabase secret/service-role key. "
-            "Set SUPABASE_SECRET_KEY near the top of app.py, "
+            "Add secret_key under [supabase] in .streamlit/secrets.toml, "
             "then restart Streamlit."
         )
     return supabase_admin

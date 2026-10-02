@@ -1,17 +1,26 @@
 import pandas as pd
 import streamlit as st
-from portal_chart import render_plotly_chart
 
-from .charts import (
-    application_status_chart,
-    development_chart,
-    land_use_pie,
-    locational_timeline,
-    processing_time_chart,
-    reclassification_by_year,
-    reclassification_date_applied_graph,
-)
-from .config import AVERAGE_HECTARE_BENCHMARK
+try:
+    from portal_chart import render_plotly_chart
+except ImportError:
+    def render_plotly_chart(figure, **kwargs):
+        return st.plotly_chart(figure, **kwargs)
+
+try:
+    from .charts import (
+        application_status_chart, development_chart, land_use_pie,
+        locational_timeline, processing_time_chart, reclassification_by_year,
+        reclassification_date_applied_graph,
+    )
+    from .config import AVERAGE_HECTARE_BENCHMARK
+except ImportError:
+    from charts import (
+        application_status_chart, development_chart, land_use_pie,
+        locational_timeline, processing_time_chart, reclassification_by_year,
+        reclassification_date_applied_graph,
+    )
+    from config import AVERAGE_HECTARE_BENCHMARK
 
 
 def _title(title, note=""):
